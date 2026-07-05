@@ -7,18 +7,75 @@ const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
 function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function buildMailHtml(code) {
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+      <div style="text-align: center; margin-bottom: 32px;">
+        <div style="width: 56px; height: 56px; background: #07C160; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+          <span style="font-size: 28px; color: white;">🌳</span>
+        </div>
+        <h1 style="font-size: 22px; color: #1a1a1a; margin: 0;">树洞验证码</h1>
+      </div>
+      <div style="background: #f7f7f7; border-radius: 16px; padding: 32px; text-align: center;">
+        <p style="font-size: 15px; color: #666; margin: 0 0 20px;">您的验证码为</p>
+        <div style="font-size: 40px; font-weight: 700; color: #07C160; letter-spacing: 8px; font-family: monospace;">${code}</div>
+        <p style="font-size: 13px; color: #999; margin: 20px 0 0;">验证码有效期为10分钟，请勿泄露给他人。</p>
+        <p style="font-size: 13px; color: #999; margin: 8px 0 0;">如果您没有注册树洞，请忽略此邮件。</p>
+      </div>
+    </div>
+  `;
+}
+
+async function sendEmailViaSendGrid(to, code) {
+  const html = buildMailHtml(code);
+  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: process.env.SENDGRID_FROM || 'ljyjohn990@gmail.com', name: '树洞' },
+      subject: '树洞 - 验证码',
+      content: [{ type: 'text/html', value: html }],
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`SendGrid API error: ${res.status} ${body}`);
+  }
+}
+
+async function sendEmailViaSMTP(to, code) {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: false,
+    connectionTimeout: 15000,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+  await transporter.sendMail({
+    from: `"树洞" <${process.env.SMTP_USER}>`,
+    to,
+    subject: '树洞 - 验证码',
+    html: buildMailHtml(code),
+  });
+}
+
+async function sendEmail(to, code) {
+  if (process.env.SENDGRID_API_KEY) {
+    await sendEmailViaSendGrid(to, code);
+  } else {
+    await sendEmailViaSMTP(to, code);
+  }
 }
 
 router.post('/send-code', async (req, res) => {
@@ -38,34 +95,12 @@ router.post('/send-code', async (req, res) => {
       [email, code, expiresAt]
     );
 
-    const mailHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-        <div style="text-align: center; margin-bottom: 32px;">
-          <div style="width: 56px; height: 56px; background: #07C160; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-            <span style="font-size: 28px; color: white;">🌳</span>
-          </div>
-          <h1 style="font-size: 22px; color: #1a1a1a; margin: 0;">树洞验证码</h1>
-        </div>
-        <div style="background: #f7f7f7; border-radius: 16px; padding: 32px; text-align: center;">
-          <p style="font-size: 15px; color: #666; margin: 0 0 20px;">您的验证码为</p>
-          <div style="font-size: 40px; font-weight: 700; color: #07C160; letter-spacing: 8px; font-family: monospace;">${code}</div>
-          <p style="font-size: 13px; color: #999; margin: 20px 0 0;">验证码有效期为10分钟，请勿泄露给他人。</p>
-          <p style="font-size: 13px; color: #999; margin: 8px 0 0;">如果您没有注册树洞，请忽略此邮件。</p>
-        </div>
-      </div>
-    `;
-
-    await transporter.sendMail({
-      from: `"树洞" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: '树洞 - 验证码',
-      html: mailHtml,
-    });
+    await sendEmail(email, code);
 
     res.json({ message: '验证码已发送' });
   } catch (err) {
     console.error('发送验证码失败:', err);
-    res.status(500).json({ error: '验证码发送失败，请稍后重试' });
+    res.status(500).json({ error: '验证码发送失败: ' + err.message });
   }
 });
 
