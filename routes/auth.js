@@ -70,8 +70,31 @@ async function sendEmailViaSMTP(to, code) {
   });
 }
 
+async function sendEmailViaBrevo(to, code) {
+  const html = buildMailHtml(code);
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { email: process.env.BREVO_FROM || 'ljyjohn990@gmail.com', name: '树洞' },
+      to: [{ email: to }],
+      subject: '树洞 - 验证码',
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Brevo API error: ${res.status} ${body}`);
+  }
+}
+
 async function sendEmail(to, code) {
-  if (process.env.SENDGRID_API_KEY) {
+  if (process.env.BREVO_API_KEY) {
+    await sendEmailViaBrevo(to, code);
+  } else if (process.env.SENDGRID_API_KEY) {
     await sendEmailViaSendGrid(to, code);
   } else {
     await sendEmailViaSMTP(to, code);
