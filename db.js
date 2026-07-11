@@ -111,6 +111,22 @@ async function initDB() {
     ON delayed_messages(sender_id, receiver_id)
   `);
 
+  // Migration: add muted columns if missing
+  try { await query(`ALTER TABLE friends ADD COLUMN IF NOT EXISTS muted_by_user1 BOOLEAN DEFAULT FALSE`); } catch {}
+  try { await query(`ALTER TABLE friends ADD COLUMN IF NOT EXISTS muted_by_user2 BOOLEAN DEFAULT FALSE`); } catch {}
+  // Migration: create blacklist table if missing
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS blacklist (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        blocked_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, blocked_id)
+      )
+    `);
+  } catch {}
+
   console.log('数据库初始化完成');
 }
 
