@@ -16,6 +16,30 @@ const DELAY_OPTIONS = [
   { label: '7天', value: 168 },
 ];
 
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function formatTime(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const hours = pad(d.getHours());
+  const mins = pad(d.getMinutes());
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) return `${hours}:${mins}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `昨天 ${hours}:${mins}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${hours}:${mins}`;
+}
+
+function getInitial(name) {
+  return name.charAt(0).toUpperCase();
+}
+
 function renderChatApp() {
   return `
     <div class="chat-app">
@@ -511,7 +535,7 @@ function updateDelayBar() {
         });
         showToast(`已定时，${DELAY_OPTIONS.find(o => o.value === hours).label}后送达`);
         selectedIds = new Set();
-        delayBar.style.display = 'none';
+        bar.style.display = 'none';
         // Reload
         const [drafts] = await Promise.all([
           apiFetch(`/messages/drafts/${activeChatUserId}`),
