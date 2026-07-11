@@ -192,13 +192,23 @@ async function loadContacts() {
       html += '<div style="padding:40px 20px;text-align:center;color:#999;font-size:14px">暂无联系人<br>搜索用户添加好友吧</div>';
     } else {
       html += friends.map(f => {
-        const newCount = newMsgCounts[f.id] || 0;
+        const newCount = f.muted ? 0 : (newMsgCounts[f.id] || 0);
         return `
-          <div class="sidebar-item" data-user-id="${f.id}">
-            <div class="avatar">${getInitial(f.username)}</div>
+          <div class="sidebar-item" data-user-id="${f.id}" data-muted="${f.muted}">
+            <div class="avatar ${f.muted ? 'muted-avatar' : ''}">${getInitial(f.username)}</div>
             <div class="info">
-              <div class="name">${escapeHtml(f.username)}</div>
+              <div class="name">
+                ${escapeHtml(f.username)}
+                ${f.muted ? '<span class="muted-tag">已屏蔽</span>' : ''}
+              </div>
               <div class="hint">${escapeHtml(f.email)}</div>
+            </div>
+            <div class="friend-actions">
+              <button class="action-btn mute-btn" data-user-id="${f.id}" data-muted="${f.muted}" title="${f.muted ? '取消屏蔽' : '屏蔽消息'}">
+                ${f.muted ? '🔇' : '🔊'}
+              </button>
+              <button class="action-btn unfriend-btn" data-user-id="${f.id}" title="删除好友">✕</button>
+              <button class="action-btn block-btn" data-user-id="${f.id}" title="拉黑">🚫</button>
             </div>
             ${newCount > 0 ? `<span class="unread-badge">${newCount}</span>` : ''}
           </div>
@@ -206,12 +216,105 @@ async function loadContacts() {
       }).join('');
     }
 
+    // Add blacklist section at bottom
+    try {
+      const blacklist = await apiFetch('/friends/blacklist');
+      if (blacklist.length) {
+        html += '<div class="section-label" style="margin-top:12px">黑名单</div>';
+        html += blacklist.map(b => `
+          <div class="sidebar-item blacklist-item">
+            <div class="avatar" style="background:#ff3b30">${getInitial(b.username)}</div>
+            <div class="info">
+              <div class="name">${escapeHtml(b.username)}</div>
+              <div class="hint">${escapeHtml(b.email)}</div>
+            </div>
+            <button class="unblock-btn" data-blocked-id="${b.id}" style="padding:4px 10px;font-size:12px;border-radius:8px;background:var(--primary-light);color:var(--primary);border:none;cursor:pointer">移出黑名单</button>
+          </div>
+        `).join('');
+      }
+    } catch {}
+
     body.innerHTML = html;
 
-    body.querySelectorAll('.sidebar-item:not(.request-item)').forEach(el => {
-      el.addEventListener('click', () => {
+    // Unblacklist button
+    body.querySelectorAll('.unblock-btn').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const blockedId = parseInt(el.dataset.blockedId);
+        try {
+          await apiFetch('/friends/unblacklist', {
+            method: 'POST',
+            body: JSON.stringify({ blockedId }),
+          });
+          showToast('已移出黑名单');
+          loadContacts();
+        } catch (err) {
+          showToast(err.message);
+        }
+      });
+    });
+
+    body.querySelectorAll('.sidebar-item:not(.request-item):not(.blacklist-item)').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.friend-actions')) return;
         const userId = parseInt(el.dataset.userId);
         openChat(userId);
+      });
+    });
+
+    // Mute button
+    body.querySelectorAll('.mute-btn').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const friendId = parseInt(el.dataset.userId);
+        try {
+          await apiFetch('/friends/mute', {
+            method: 'POST',
+            body: JSON.stringify({ friendId }),
+          });
+          showToast(el.dataset.muted === 'true' ? '已取消屏蔽' : '已屏蔽消息');
+          loadContacts();
+        } catch (err) {
+          showToast(err.message);
+        }
+      });
+    });
+
+    // Unfriend button
+    body.querySelectorAll('.unfriend-btn').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const friendId = parseInt(el.dataset.userId);
+        if (!confirm('确定删除好友？')) return;
+        try {
+          await apiFetch('/friends/unfriend', {
+            method: 'POST',
+            body: JSON.stringify({ friendId }),
+          });
+          showToast('已删除好友');
+          loadContacts();
+        } catch (err) {
+          showToast(err.message);
+        }
+      });
+    });
+
+    // Block button
+    body.querySelectorAll('.block-btn').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const blockedId = parseInt(el.dataset.userId);
+        if (!confirm('确定拉黑？对方将无法向你发送好友请求。')) return;
+        try {
+          await apiFetch('/friends/blacklist', {
+            method: 'POST',
+            body: JSON.stringify({ blockedId }),
+          });
+          showToast('已拉黑');
+          loadContacts();
+        } catch (err) {
+          showToast(err.message);
+        }
       });
     });
 
@@ -373,12 +476,18 @@ function loadChats() {
 // ===== New Message Polling =====
 async function loadNewDelivered() {
   try {
-    const counts = await apiFetch('/messages/new');
+    const [counts, friends] = await Promise.all([
+      apiFetch('/messages/new'),
+      apiFetch('/friends/list'),
+    ]);
+    const mutedIds = new Set(friends.filter(f => f.muted).map(f => f.id));
     newMsgCounts = {};
     let total = 0;
     for (const c of counts) {
-      newMsgCounts[c.senderId] = c.count;
-      total += c.count;
+      if (!mutedIds.has(c.senderId)) {
+        newMsgCounts[c.senderId] = c.count;
+        total += c.count;
+      }
     }
 
     // Update badge

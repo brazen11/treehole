@@ -69,8 +69,20 @@ async function initDB() {
       id SERIAL PRIMARY KEY,
       user1_id INTEGER NOT NULL REFERENCES users(id),
       user2_id INTEGER NOT NULL REFERENCES users(id),
+      muted_by_user1 BOOLEAN DEFAULT FALSE,
+      muted_by_user2 BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT NOW(),
       UNIQUE(user1_id, user2_id)
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS blacklist (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      blocked_id INTEGER NOT NULL REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(user_id, blocked_id)
     )
   `);
 

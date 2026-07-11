@@ -887,6 +887,55 @@ a:hover {
   cursor: not-allowed;
 }
 
+/* ===== Friend Actions ===== */
+.friend-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.sidebar-item:hover .friend-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.action-btn:hover {
+  background: #f0f0f0;
+}
+
+.muted-tag {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: #f0f0f0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.muted-avatar {
+  opacity: 0.5;
+}
+
+.blacklist-item .avatar {
+  background: #ff3b30 !important;
+}
+
 /* ===== Draft Messages ===== */
 .draft-msg .bubble {
   background: #f0f0f0 !important;
