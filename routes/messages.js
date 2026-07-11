@@ -102,11 +102,11 @@ router.get('/new', authMiddleware, async (req, res) => {
 router.post('/schedule', authMiddleware, async (req, res) => {
   try {
     const { messageIds, delayHours, receiverId } = req.body;
-    if (!messageIds?.length || !delayHours || !receiverId) {
+    if (!messageIds?.length || delayHours === undefined || delayHours === null || !receiverId) {
       return res.status(400).json({ error: '参数错误' });
     }
 
-    const validDelays = [3, 6, 12, 24, 48, 72, 120, 168];
+    const validDelays = [0, 0.5, 1, 2, 3, 6, 12, 24, 48, 72, 120, 168];
     if (!validDelays.includes(delayHours)) {
       return res.status(400).json({ error: '无效的延迟时间' });
     }

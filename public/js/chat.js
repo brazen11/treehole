@@ -6,6 +6,10 @@ let newMsgCounts = {};
 let pollTimer = null;
 
 const DELAY_OPTIONS = [
+  { label: '立即发送', value: 0 },
+  { label: '30分钟', value: 0.5 },
+  { label: '1小时', value: 1 },
+  { label: '2小时', value: 2 },
   { label: '3小时', value: 3 },
   { label: '6小时', value: 6 },
   { label: '12小时', value: 12 },
