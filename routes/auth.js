@@ -1,8 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 const { query, queryOne } = require('../db');
+const { sendEmail } = require('./mailer');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
@@ -30,77 +30,6 @@ function buildMailHtml(code) {
   `;
 }
 
-async function sendEmailViaSendGrid(to, code) {
-  const html = buildMailHtml(code);
-  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: process.env.SENDGRID_FROM || 'ljyjohn990@gmail.com', name: '树洞' },
-      subject: '树洞 - 验证码',
-      content: [{ type: 'text/html', value: html }],
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`SendGrid API error: ${res.status} ${body}`);
-  }
-}
-
-async function sendEmailViaSMTP(to, code) {
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: false,
-    connectionTimeout: 15000,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-  await transporter.sendMail({
-    from: `"树洞" <${process.env.SMTP_USER}>`,
-    to,
-    subject: '树洞 - 验证码',
-    html: buildMailHtml(code),
-  });
-}
-
-async function sendEmailViaBrevo(to, code) {
-  const html = buildMailHtml(code);
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': process.env.BREVO_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      sender: { email: process.env.BREVO_FROM || 'ljyjohn990@gmail.com', name: '树洞' },
-      to: [{ email: to }],
-      subject: '树洞 - 验证码',
-      htmlContent: html,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Brevo API error: ${res.status} ${body}`);
-  }
-}
-
-async function sendEmail(to, code) {
-  if (process.env.BREVO_API_KEY) {
-    await sendEmailViaBrevo(to, code);
-  } else if (process.env.SENDGRID_API_KEY) {
-    await sendEmailViaSendGrid(to, code);
-  } else {
-    await sendEmailViaSMTP(to, code);
-  }
-}
-
 router.post('/send-code', async (req, res) => {
   try {
     const { email } = req.body;
@@ -118,7 +47,7 @@ router.post('/send-code', async (req, res) => {
       [email, code, expiresAt]
     );
 
-    await sendEmail(email, code);
+    await sendEmail(email, '树洞 - 验证码', buildMailHtml(code));
 
     res.json({ message: '验证码已发送' });
   } catch (err) {

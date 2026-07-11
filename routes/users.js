@@ -9,9 +9,12 @@ router.get('/search', authMiddleware, async (req, res) => {
     const { q } = req.query;
     if (!q || q.trim().length === 0) return res.json([]);
 
+    const term = q.trim();
     const users = await queryAll(
-      'SELECT id, username, created_at FROM users WHERE username ILIKE $1 AND id != $2 LIMIT 20',
-      [`%${q.trim()}%`, req.userId]
+      `SELECT id, username, email, created_at FROM users
+       WHERE (username ILIKE $1 OR email ILIKE $1) AND id != $2
+       LIMIT 20`,
+      [`%${term}%`, req.userId]
     );
     res.json(users);
   } catch (err) {

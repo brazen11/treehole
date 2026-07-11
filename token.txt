@@ -1,0 +1,6 @@
+请把你新生成的 GitHub token 粘贴在这一行，然后保存文件（Ctrl+S），再回到终端运行：
+  git remote set-url origin https://brazen11:YOUR_TOKEN@github.com/brazen11/treehole.git
+  git push
+
+然后把 token.txt 删除：rm token.txt
+

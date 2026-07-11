@@ -1,5 +1,4 @@
 const { Pool } = require('pg');
-const crypto = require('crypto');
 
 let pool;
 
@@ -55,38 +54,49 @@ async function initDB() {
   `);
 
   await query(`
-    CREATE TABLE IF NOT EXISTS messages (
+    CREATE TABLE IF NOT EXISTS friend_requests (
+      id SERIAL PRIMARY KEY,
+      sender_id INTEGER NOT NULL REFERENCES users(id),
+      receiver_id INTEGER NOT NULL REFERENCES users(id),
+      status VARCHAR(20) DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS friends (
+      id SERIAL PRIMARY KEY,
+      user1_id INTEGER NOT NULL REFERENCES users(id),
+      user2_id INTEGER NOT NULL REFERENCES users(id),
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(user1_id, user2_id)
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS delayed_messages (
       id SERIAL PRIMARY KEY,
       sender_id INTEGER NOT NULL REFERENCES users(id),
       receiver_id INTEGER NOT NULL REFERENCES users(id),
       content TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT NOW(),
-      read BOOLEAN DEFAULT FALSE
+      status VARCHAR(20) DEFAULT 'draft',
+      batch_id VARCHAR(36),
+      delay_hours NUMERIC,
+      send_at TIMESTAMP,
+      delivered_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
     )
   `);
 
   await query(`
-    CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver
-    ON messages(sender_id, receiver_id)
+    CREATE INDEX IF NOT EXISTS idx_delayed_messages_send_at
+    ON delayed_messages(send_at) WHERE status = 'scheduled'
   `);
 
   await query(`
-    CREATE INDEX IF NOT EXISTS idx_messages_receiver_unread
-    ON messages(receiver_id, read) WHERE read = FALSE
-  `);
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS conversations (
-      id SERIAL PRIMARY KEY,
-      user1_id INTEGER NOT NULL,
-      user2_id INTEGER NOT NULL,
-      last_message TEXT,
-      last_message_time TIMESTAMP DEFAULT NOW(),
-      last_sender_id INTEGER,
-      UNIQUE(user1_id, user2_id),
-      FOREIGN KEY (user1_id) REFERENCES users(id),
-      FOREIGN KEY (user2_id) REFERENCES users(id)
-    )
+    CREATE INDEX IF NOT EXISTS idx_delayed_messages_sender_receiver
+    ON delayed_messages(sender_id, receiver_id)
   `);
 
   console.log('数据库初始化完成');
