@@ -151,6 +151,7 @@ function closeChat() {
   selectedIds = new Set();
   document.getElementById('chat-area').style.display = 'none';
   document.getElementById('chat-placeholder').style.display = 'flex';
+  document.querySelector('.chat-panel')?.classList.remove('show');
   document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
 }
 
@@ -531,6 +532,7 @@ async function openChat(userId) {
 
   document.getElementById('chat-placeholder').style.display = 'none';
   document.getElementById('chat-area').style.display = 'flex';
+  document.querySelector('.chat-panel')?.classList.add('show');
 
   try {
     const user = await apiFetch(`/users/${userId}`);
